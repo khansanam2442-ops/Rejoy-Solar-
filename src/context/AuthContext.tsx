@@ -251,6 +251,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       const demoAccount = DEMO_ACCOUNTS.find(d => d.email.toLowerCase() === cleanEmail);
 
+      const customers = storageService.getCustomers();
+      const linkedCustomer = customers.find(
+        c => c.email && c.email.trim().toLowerCase() === cleanEmail
+      );
+
       // Check account activation
       if (linkedEmp) {
         if (linkedEmp.loginEnabled === false) {
@@ -261,6 +266,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      if (linkedCustomer && linkedCustomer.status === 'CANCELLED') {
+        throw new Error('This customer account is inactive. Please contact an administrator.');
+      }
+
       // Check bootstrapped owner/admin accounts
       const isBootstrappedAdmin =
         cleanEmail === 'admin@rejoysolar.com' ||
@@ -268,22 +277,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cleanEmail === 'kunaldas2442@gmail.com';
 
       // Validate account existence
-      if (!linkedEmp && !demoAccount && !isBootstrappedAdmin && !cleanEmail.includes('customer')) {
+      if (!linkedEmp && !demoAccount && !isBootstrappedAdmin && !linkedCustomer && !cleanEmail.includes('customer')) {
         throw new Error('Account not found with this email address. Please contact an administrator.');
       }
 
-      // In this development/demo environment, every available user—including Admin—uses DEMO_DEFAULT_PASSWORD ('123456')
-      if (cleanPass !== DEMO_DEFAULT_PASSWORD && cleanPass !== 'Password@123') {
+      // Check password match (supports customer-specific password, employee default, or standard fallback)
+      const expectedCustomerPassword = linkedCustomer?.password;
+      const isCustomerPassMatch = Boolean(expectedCustomerPassword && cleanPass === expectedCustomerPassword);
+      const isStandardPassMatch = cleanPass === DEMO_DEFAULT_PASSWORD || cleanPass === 'Password@123';
+
+      if (!isCustomerPassMatch && !isStandardPassMatch) {
         throw new Error('Invalid email or password. Please verify your credentials.');
       }
 
       // Construct profile for authenticated user
       const defaultRole: UserRole = isBootstrappedAdmin
         ? 'Admin'
-        : linkedEmp?.systemRole ||
-          linkedEmp?.assignedRole ||
-          demoAccount?.role ||
-          (cleanEmail.includes('customer') ? 'Customer' : 'Admin');
+        : linkedCustomer
+          ? 'Customer'
+          : linkedEmp?.systemRole ||
+            linkedEmp?.assignedRole ||
+            demoAccount?.role ||
+            (cleanEmail.includes('customer') ? 'Customer' : 'Admin');
 
       const isFw = Boolean(
         linkedEmp?.isFieldWorker ??
@@ -300,17 +315,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
 
       const authenticatedProfile: UserProfile = {
-        id: linkedEmp?.id || demoAccount?.profile.id || ('usr-emp-' + cleanEmail.replace(/[^a-z0-9]/g, '-')),
-        employeeId: linkedEmp?.employeeCode || linkedEmp?.id || (isBootstrappedAdmin ? 'EMP001' : 'EMP999'),
+        id: linkedCustomer?.id || linkedEmp?.id || demoAccount?.profile.id || ('usr-emp-' + cleanEmail.replace(/[^a-z0-9]/g, '-')),
+        employeeId: linkedCustomer ? `CUST-${linkedCustomer.id}` : (linkedEmp?.employeeCode || linkedEmp?.id || (isBootstrappedAdmin ? 'EMP001' : 'EMP999')),
         name: isBootstrappedAdmin
           ? 'Vikram Patel (Lead Admin)'
-          : linkedEmp?.name || demoAccount?.name || email.split('@')[0] || 'Solar Team Member',
+          : linkedCustomer?.name || linkedEmp?.name || demoAccount?.name || email.split('@')[0] || 'Solar Team Member',
         email: cleanEmail,
         role: defaultRole,
-        phone: linkedEmp?.phone || '+91 98250 11223',
-        department: isBootstrappedAdmin ? 'Administration' : (linkedEmp?.department || demoAccount?.department || 'Administration'),
-        designation: isBootstrappedAdmin ? 'Managing Director' : (linkedEmp?.designation || demoAccount?.profile.designation || (defaultRole as string)),
-        isFieldWorker: isFw,
+        phone: linkedCustomer?.phone || linkedEmp?.phone || '+91 98250 11223',
+        department: linkedCustomer ? 'Client Portal' : (isBootstrappedAdmin ? 'Administration' : (linkedEmp?.department || demoAccount?.department || 'Administration')),
+        designation: linkedCustomer ? 'Client Portal Account' : (isBootstrappedAdmin ? 'Managing Director' : (linkedEmp?.designation || demoAccount?.profile.designation || (defaultRole as string))),
+        isFieldWorker: linkedCustomer ? false : isFw,
         assignedProjects: []
       };
 

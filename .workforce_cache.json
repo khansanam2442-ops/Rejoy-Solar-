@@ -1,10 +1,10 @@
 [
   {
     "userId": "emp-1",
-    "name": "Vikram Patel (Lead Admin)",
+    "name": "Vikram Patel",
     "role": "Admin",
-    "updatedAt": "2026-10-01T19:19:47.632Z",
-    "lastSeenAt": "2026-10-01T19:19:47.632Z",
+    "updatedAt": "2026-10-13T07:26:14.475Z",
+    "lastSeenAt": "2026-10-13T07:26:14.475Z",
     "isOnline": true,
     "isSharingLocation": false,
     "hasLocation": false,

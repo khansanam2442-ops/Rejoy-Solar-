@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import Pusher from 'pusher';
 import dotenv from 'dotenv';
+import { apiRouter } from './server/routes/apiRouter';
 
 dotenv.config();
 
@@ -87,6 +88,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  app.use('/api', apiRouter);
 
   // API Health & Status Check
   app.get(['/api/health', '/api/status', '/api/status.php'], (_req, res) => {

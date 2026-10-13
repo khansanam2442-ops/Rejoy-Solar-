@@ -4,6 +4,7 @@ import { useAuth, ROLE_DEFINITIONS } from '../../context/AuthContext';
 import { storageService } from '../../services/storage';
 import { SystemSettings } from '../../types/solar';
 import { RoleBasedAccessControlPanel } from '../settings/RoleBasedAccessControlPanel';
+import { DatabaseSettingsPanel } from '../settings/DatabaseSettingsPanel';
 import {
   Settings,
   Building2,
@@ -137,10 +138,30 @@ export const SettingsView: React.FC = () => {
             ACL
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('database')}
+          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            currentTab === 'database'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-amber-800 hover:text-amber-950 hover:bg-amber-50'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>MySQL Database & APIs</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold ${
+            currentTab === 'database' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-900'
+          }`}>
+            SQL
+          </span>
+        </button>
       </div>
 
       {/* Conditional Content based on active tab */}
-      {currentTab === 'acl' ? (
+      {currentTab === 'database' ? (
+        <DatabaseSettingsPanel />
+      ) : currentTab === 'acl' ? (
         <RoleBasedAccessControlPanel />
       ) : (
         <form onSubmit={handleSave} className="space-y-6">

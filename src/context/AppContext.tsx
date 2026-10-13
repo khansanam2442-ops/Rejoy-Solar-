@@ -4,7 +4,7 @@ import { storageService } from '../services/storage';
 import { ExportModule } from '../services/exportImport';
 import { ReportCategory } from '../types/reports';
 
-export type SettingsTab = 'general' | 'tally' | 'whatsapp' | 'acl' | 'users';
+export type SettingsTab = 'general' | 'tally' | 'whatsapp' | 'acl' | 'users' | 'database';
 
 export type AppView =
   | 'dashboard'
@@ -98,6 +98,9 @@ const getInitialViewFromPath = (): { view: AppView; filterKey: string | null; se
   // Settings sub-routes
   if (path === '/settings/acl' || path.endsWith('/settings/acl') || path === '/acl' || path === '/roles') {
     return { view: 'settings', filterKey: null, settingsTab: 'acl' };
+  }
+  if (path === '/settings/database' || path.endsWith('/settings/database') || path === '/database' || path === '/mysql') {
+    return { view: 'settings', filterKey: null, settingsTab: 'database' };
   }
   if (path === '/settings/tally' || path.endsWith('/settings/tally')) {
     return { view: 'settings', filterKey: null, settingsTab: 'tally' };

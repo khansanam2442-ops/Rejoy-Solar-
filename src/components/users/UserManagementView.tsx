@@ -7,33 +7,25 @@ import {
   Users,
   UserPlus,
   Search,
-  Filter,
   ShieldCheck,
   CheckCircle2,
   XCircle,
   Edit2,
-  Lock,
   Mail,
-  Phone,
   Briefcase,
-  Building,
   Navigation,
-  Sparkles,
-  AlertTriangle,
   RefreshCw,
-  X,
-  Eye,
-  Key
+  X
 } from 'lucide-react';
 
-interface UserFormData {
+interface EmployeeFormData {
   name: string;
   email: string;
-  employeeCode: string;
+  code: string;
+  phone: string;
   department: string;
   designation: string;
   role: UserRole;
-  phone: string;
   isFieldWorker: boolean;
   loginEnabled: boolean;
   status: 'ACTIVE' | 'INACTIVE';
@@ -42,7 +34,7 @@ interface UserFormData {
 
 export const UserManagementView: React.FC = () => {
   const { showToast, triggerRefresh } = useApp();
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser } = useAuth();
 
   const [employees, setEmployees] = useState<Employee[]>(() => storageService.getEmployees());
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,14 +43,25 @@ export const UserManagementView: React.FC = () => {
   const [fieldWorkerFilter, setFieldWorkerFilter] = useState<string>('ALL');
 
   // Modal states
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
-  // Form state
-  const initialForm: UserFormData = {
+  // Available employee roles (excludes Customer role)
+  const employeeRoleDefinitions = useMemo(() => {
+    return ROLE_DEFINITIONS.filter(r => r.role !== 'Customer');
+  }, []);
+
+  // Helper to get next employee code
+  const getNextEmployeeCode = (list: Employee[]) => {
+    const empCount = list.filter(e => e.systemRole !== 'Customer').length;
+    return `EMP${String(empCount + 1).padStart(3, '0')}`;
+  };
+
+  // Initial form values
+  const defaultEmployeeForm: EmployeeFormData = {
     name: '',
     email: '',
-    employeeCode: `EMP${String(employees.length + 1).padStart(3, '0')}`,
+    code: getNextEmployeeCode(employees),
     department: 'Operations',
     designation: 'Solar Engineer',
     role: 'Site Survey Engineer',
@@ -69,15 +72,20 @@ export const UserManagementView: React.FC = () => {
     tempPassword: 'User@12345'
   };
 
-  const [formData, setFormData] = useState<UserFormData>(initialForm);
+  const [formData, setFormData] = useState<EmployeeFormData>(defaultEmployeeForm);
 
   const reloadEmployees = () => {
     setEmployees(storageService.getEmployees());
   };
 
-  // Filtered employees
+  // Filtered employees (internal staff / system users)
   const filteredUsers = useMemo(() => {
     return employees.filter(emp => {
+      // Exclude customer accounts if any exist in the employee list
+      if (emp.systemRole === 'Customer' || emp.assignedRole === 'Customer') {
+        return false;
+      }
+
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -88,7 +96,9 @@ export const UserManagementView: React.FC = () => {
         (emp.department || '').toLowerCase().includes(q) ||
         (emp.systemRole || '').toLowerCase().includes(q);
 
-      const matchesRole = roleFilter === 'ALL' || (emp.systemRole || emp.assignedRole) === roleFilter;
+      const matchesRole =
+        roleFilter === 'ALL' || (emp.systemRole || emp.assignedRole) === roleFilter;
+
       const matchesStatus =
         statusFilter === 'ALL' ||
         (statusFilter === 'ACTIVE' && emp.status === 'ACTIVE' && emp.accountStatus !== 'DISABLED') ||
@@ -96,15 +106,15 @@ export const UserManagementView: React.FC = () => {
 
       const isFw = Boolean(
         emp.isFieldWorker ??
-        [
-          'Site Survey Engineer',
-          'Site Inspector',
-          'Civil Team',
-          'Structure Team',
-          'Installation Team',
-          'Electrical Team',
-          'Technician'
-        ].includes(emp.systemRole || '')
+          [
+            'Site Survey Engineer',
+            'Site Inspector',
+            'Civil Team',
+            'Structure Team',
+            'Installation Team',
+            'Electrical Team',
+            'Technician'
+          ].includes(emp.systemRole || '')
       );
 
       const matchesFieldWorker =
@@ -118,25 +128,29 @@ export const UserManagementView: React.FC = () => {
 
   // Status stats
   const stats = useMemo(() => {
-    const total = employees.length;
-    const active = employees.filter(e => e.status === 'ACTIVE' && e.accountStatus !== 'DISABLED').length;
-    const fieldWorkers = employees.filter(e =>
+    const nonCustomerEmployees = employees.filter(
+      e => e.systemRole !== 'Customer' && e.assignedRole !== 'Customer'
+    );
+    const total = nonCustomerEmployees.length;
+    const active = nonCustomerEmployees.filter(
+      e => e.status === 'ACTIVE' && e.accountStatus !== 'DISABLED'
+    ).length;
+    const fieldWorkers = nonCustomerEmployees.filter(e =>
       Boolean(
         e.isFieldWorker ??
-        [
-          'Site Survey Engineer',
-          'Site Inspector',
-          'Civil Team',
-          'Structure Team',
-          'Installation Team',
-          'Electrical Team',
-          'Technician'
-        ].includes(e.systemRole || '')
+          [
+            'Site Survey Engineer',
+            'Site Inspector',
+            'Civil Team',
+            'Structure Team',
+            'Installation Team',
+            'Electrical Team',
+            'Technician'
+          ].includes(e.systemRole || '')
       )
     ).length;
-    const adminCount = employees.filter(e => e.systemRole === 'Admin').length;
 
-    return { total, active, fieldWorkers, adminCount };
+    return { total, active, fieldWorkers };
   }, [employees]);
 
   // Toggle user activation / deactivation
@@ -165,21 +179,20 @@ export const UserManagementView: React.FC = () => {
     storageService.saveEmployees(updated);
     setEmployees(updated);
     triggerRefresh();
-
     showToast(
-      `User ${emp.name} account ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`,
+      `Employee ${emp.name} account ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`,
       isCurrentlyActive ? 'warning' : 'success'
     );
   };
 
-  // Open Create Modal
+  // Open Create Modal for Employee
   const handleOpenCreate = () => {
-    setFormData({
-      ...initialForm,
-      employeeCode: `EMP${String(employees.length + 1).padStart(3, '0')}`
-    });
     setEditingEmployee(null);
-    setIsCreateModalOpen(true);
+    setFormData({
+      ...defaultEmployeeForm,
+      code: getNextEmployeeCode(employees)
+    });
+    setIsModalOpen(true);
   };
 
   // Open Edit Modal
@@ -188,52 +201,103 @@ export const UserManagementView: React.FC = () => {
     setFormData({
       name: emp.name,
       email: emp.email,
-      employeeCode: emp.employeeCode,
+      code: emp.employeeCode,
       department: emp.department || 'Operations',
-      designation: emp.designation,
-      role: emp.systemRole || emp.assignedRole || 'Site Survey Engineer',
+      designation: emp.designation || 'Solar Engineer',
+      role: (emp.systemRole || emp.assignedRole || 'Site Survey Engineer') as UserRole,
       phone: emp.phone || '',
       isFieldWorker: Boolean(
         emp.isFieldWorker ??
-        [
-          'Site Survey Engineer',
-          'Site Inspector',
-          'Civil Team',
-          'Structure Team',
-          'Installation Team',
-          'Electrical Team',
-          'Technician'
-        ].includes(emp.systemRole || '')
+          [
+            'Site Survey Engineer',
+            'Site Inspector',
+            'Civil Team',
+            'Structure Team',
+            'Installation Team',
+            'Electrical Team',
+            'Technician'
+          ].includes(emp.systemRole || '')
       ),
       loginEnabled: emp.loginEnabled ?? true,
       status: emp.accountStatus === 'DISABLED' || emp.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE'
     });
-    setIsCreateModalOpen(true);
+    setIsModalOpen(true);
   };
 
   // Submit User Create / Edit
   const handleSubmitUser = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim() || !formData.email.trim()) {
-      showToast('Please provide a valid name and email address.', 'error');
+    const cleanName = formData.name.trim();
+    const cleanEmail = formData.email.trim().toLowerCase();
+    const cleanCode = formData.code.trim();
+
+    // 1. Name validation
+    if (!cleanName || cleanName.length < 2) {
+      showToast('Please provide a valid employee name.', 'error');
       return;
     }
 
+    // 2. Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+
+    // 3. Code validation
+    if (!cleanCode) {
+      showToast('Please provide an Employee ID / Code.', 'error');
+      return;
+    }
+
+    // 4. Duplicate checks
+    const duplicateEmail = employees.find(
+      emp => emp.id !== editingEmployee?.id && emp.email.trim().toLowerCase() === cleanEmail
+    );
+    if (duplicateEmail) {
+      showToast(
+        `A user with email "${cleanEmail}" already exists (${duplicateEmail.name}).`,
+        'error'
+      );
+      return;
+    }
+
+    const duplicateCode = employees.find(
+      emp => emp.id !== editingEmployee?.id && emp.employeeCode.trim().toUpperCase() === cleanCode.toUpperCase()
+    );
+    if (duplicateCode) {
+      showToast(
+        `A user with code "${cleanCode}" already exists (${duplicateCode.name}).`,
+        'error'
+      );
+      return;
+    }
+
+    // 5. Department validation
+    if (!formData.department.trim()) {
+      showToast('Please specify a department for this employee.', 'error');
+      return;
+    }
+
+    const finalRole: UserRole = formData.role;
+    const finalDept = formData.department.trim();
+    const finalDesignation = formData.designation.trim() || (formData.role as string);
+
     if (editingEmployee) {
-      // Update existing
+      // Update existing record
       const updated = employees.map(emp => {
         if (emp.id === editingEmployee.id) {
           return {
             ...emp,
-            name: formData.name.trim(),
-            email: formData.email.trim().toLowerCase(),
-            employeeCode: formData.employeeCode.trim(),
-            department: formData.department.trim(),
-            designation: formData.designation.trim(),
-            systemRole: formData.role,
-            assignedRole: formData.role,
+            name: cleanName,
+            email: cleanEmail,
+            employeeCode: cleanCode,
             phone: formData.phone.trim(),
+            department: finalDept,
+            designation: finalDesignation,
+            systemRole: finalRole,
+            assignedRole: finalRole,
             isFieldWorker: formData.isFieldWorker,
             loginEnabled: formData.loginEnabled,
             status: formData.status === 'ACTIVE' ? ('ACTIVE' as const) : ('INACTIVE' as const),
@@ -246,19 +310,19 @@ export const UserManagementView: React.FC = () => {
 
       storageService.saveEmployees(updated);
       setEmployees(updated);
-      showToast(`User ${formData.name} updated successfully`, 'success');
+      showToast(`Employee ${cleanName} updated successfully`, 'success');
     } else {
-      // Create new
+      // Create new record
       const newEmp: Employee = {
         id: `emp-${Date.now()}`,
-        employeeCode: formData.employeeCode.trim() || `EMP${String(employees.length + 1).padStart(3, '0')}`,
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        employeeCode: cleanCode,
+        name: cleanName,
+        email: cleanEmail,
         phone: formData.phone.trim() || '+91 98000 00000',
-        department: formData.department.trim() || 'Operations',
-        designation: formData.designation.trim() || (formData.role as string),
-        systemRole: formData.role,
-        assignedRole: formData.role,
+        department: finalDept,
+        designation: finalDesignation,
+        systemRole: finalRole,
+        assignedRole: finalRole,
         isFieldWorker: formData.isFieldWorker,
         loginEnabled: formData.loginEnabled,
         status: formData.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
@@ -273,11 +337,11 @@ export const UserManagementView: React.FC = () => {
       const updated = [newEmp, ...employees];
       storageService.saveEmployees(updated);
       setEmployees(updated);
-      showToast(`User ${newEmp.name} created successfully`, 'success');
+      showToast(`Employee ${newEmp.name} created successfully`, 'success');
     }
 
     triggerRefresh();
-    setIsCreateModalOpen(false);
+    setIsModalOpen(false);
   };
 
   return (
@@ -290,46 +354,47 @@ export const UserManagementView: React.FC = () => {
               System Administration
             </span>
             <span className="text-xs text-slate-400">•</span>
-            <span className="text-xs text-slate-500 font-medium">Access Control & Role Directory</span>
+            <span className="text-xs text-slate-500 font-medium">Access Control & Employee Directory</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
             User Management
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage user accounts, roles, departments, employee IDs, and field worker tracking permissions.
+            Manage employee access, roles, departments, system credentials, and operational permissions.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={reloadEmployees}
-            className="p-2.5 text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-2xs"
+            className="p-2.5 text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
             title="Refresh list"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {/* Add Employee button */}
           <button
             onClick={handleOpenCreate}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            <span>+ Create User</span>
+            <span>+ Add Employee</span>
           </button>
         </div>
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Total Users</span>
+            <span className="text-xs font-semibold text-slate-500">Total Employees</span>
             <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
-              <Users className="w-4 h-4" />
+              <Briefcase className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 text-2xl font-black text-slate-900">{stats.total}</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Configured ERP profiles</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Staff & system users</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
@@ -340,29 +405,18 @@ export const UserManagementView: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-black text-emerald-700">{stats.active}</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Can authenticate into ERP</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Can authenticate</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-amber-600">Field Workers</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+            <span className="text-xs font-semibold text-indigo-600">Field Engineers</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
               <Navigation className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 text-2xl font-black text-amber-700">{stats.fieldWorkers}</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">GPS location tracking enabled</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-indigo-600">Admin Authority</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-black text-indigo-700">{stats.adminCount}</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Root system administrators</p>
+          <div className="mt-2 text-2xl font-black text-indigo-700">{stats.fieldWorkers}</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">GPS location tracked</p>
         </div>
       </div>
 
@@ -374,8 +428,8 @@ export const UserManagementView: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search by name, email, employee code, designation..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+            placeholder="Search by name, email, employee code, department, role..."
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
           />
         </div>
 
@@ -386,8 +440,8 @@ export const UserManagementView: React.FC = () => {
             onChange={e => setRoleFilter(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-hidden"
           >
-            <option value="ALL">All Roles ({ROLE_DEFINITIONS.length})</option>
-            {ROLE_DEFINITIONS.map(r => (
+            <option value="ALL">All Roles</option>
+            {employeeRoleDefinitions.map(r => (
               <option key={r.role} value={r.role}>
                 {r.role}
               </option>
@@ -412,8 +466,8 @@ export const UserManagementView: React.FC = () => {
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-hidden"
           >
             <option value="ALL">All Personnel</option>
-            <option value="YES">Field Workers Only</option>
-            <option value="NO">Office / Non-Field</option>
+            <option value="YES">Field Tracked Only</option>
+            <option value="NO">Non-Field / Office</option>
           </select>
         </div>
       </div>
@@ -424,12 +478,12 @@ export const UserManagementView: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                <th className="py-3 px-4">User & Code</th>
+                <th className="py-3 px-4">Employee & Code</th>
                 <th className="py-3 px-4">Email Address</th>
-                <th className="py-3 px-4">Operational Role</th>
-                <th className="py-3 px-4">Department</th>
-                <th className="py-3 px-4 text-center">Field Worker</th>
-                <th className="py-3 px-4 text-center">Account Status</th>
+                <th className="py-3 px-4">Role / Permissions</th>
+                <th className="py-3 px-4">Department & Designation</th>
+                <th className="py-3 px-4 text-center">Field GPS</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -438,8 +492,8 @@ export const UserManagementView: React.FC = () => {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold text-slate-600">No users match your search criteria</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Try clearing filters or adding a new user</p>
+                    <p className="font-semibold text-slate-600">No employees match your search criteria</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Try adjusting filters or adding a new employee</p>
                   </td>
                 </tr>
               ) : (
@@ -449,15 +503,15 @@ export const UserManagementView: React.FC = () => {
                   );
                   const isFw = Boolean(
                     emp.isFieldWorker ??
-                    [
-                      'Site Survey Engineer',
-                      'Site Inspector',
-                      'Civil Team',
-                      'Structure Team',
-                      'Installation Team',
-                      'Electrical Team',
-                      'Technician'
-                    ].includes(emp.systemRole || '')
+                      [
+                        'Site Survey Engineer',
+                        'Site Inspector',
+                        'Civil Team',
+                        'Structure Team',
+                        'Installation Team',
+                        'Electrical Team',
+                        'Technician'
+                      ].includes(emp.systemRole || '')
                   );
                   const isActive = emp.accountStatus !== 'DISABLED' && emp.status !== 'INACTIVE';
                   const isRootAdmin = emp.systemRole === 'Admin' && emp.id === 'emp-1';
@@ -467,7 +521,7 @@ export const UserManagementView: React.FC = () => {
                       {/* Name & Code */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0">
+                          <div className="w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center border shrink-0 bg-slate-100 text-slate-700 border-slate-200">
                             {emp.photoUrl ? (
                               <img
                                 src={emp.photoUrl}
@@ -480,7 +534,7 @@ export const UserManagementView: React.FC = () => {
                           </div>
                           <div>
                             <span className="font-bold text-slate-900 block">{emp.name}</span>
-                            <span className="text-[11px] font-mono text-slate-500">
+                            <span className="text-[11px] font-mono text-slate-500 mt-0.5 block">
                               {emp.employeeCode}
                             </span>
                           </div>
@@ -490,7 +544,7 @@ export const UserManagementView: React.FC = () => {
                       {/* Email */}
                       <td className="py-3.5 px-4 font-mono text-slate-600 text-[11px]">
                         <div className="flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>{emp.email}</span>
                         </div>
                       </td>
@@ -507,9 +561,14 @@ export const UserManagementView: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Department */}
+                      {/* Department & Designation */}
                       <td className="py-3.5 px-4 text-slate-600 font-medium">
-                        {emp.department || 'Operations'}
+                        <div>
+                          <span className="text-slate-700 block">{emp.department || 'Operations'}</span>
+                          {emp.designation && (
+                            <span className="text-[10px] text-slate-400 block">{emp.designation}</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Field Worker */}
@@ -545,17 +604,16 @@ export const UserManagementView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(emp)}
-                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                            title="Edit User & Role"
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Employee"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-
                           <button
                             type="button"
                             onClick={() => handleToggleStatus(emp)}
                             disabled={isRootAdmin}
-                            className={`p-1.5 rounded-lg transition-colors ${
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                               isRootAdmin
                                 ? 'opacity-30 cursor-not-allowed text-slate-400'
                                 : isActive
@@ -587,33 +645,36 @@ export const UserManagementView: React.FC = () => {
         </div>
       </div>
 
-      {/* Create / Edit User Modal */}
-      {isCreateModalOpen && (
+      {/* Create / Edit Employee Modal */}
+      {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200/80 my-8">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
-                  <UserPlus className="w-5 h-5" />
+                <div className="p-2 rounded-xl border bg-indigo-50 border-indigo-200 text-indigo-700">
+                  <Briefcase className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    {editingEmployee ? `Edit User: ${editingEmployee.name}` : 'Create New User'}
+                    {editingEmployee ? `Edit Employee: ${editingEmployee.name}` : 'Add New Employee'}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Assign role, credentials, department and field worker flags
+                    Assign employee role, credentials, department and field worker flags
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitUser} className="space-y-4 mt-5">
+              {/* Row 1: Name and Employee Code */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -636,28 +697,45 @@ export const UserManagementView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    value={formData.employeeCode}
-                    onChange={e => setFormData({ ...formData, employeeCode: e.target.value })}
+                    value={formData.code}
+                    onChange={e => setFormData({ ...formData, code: e.target.value })}
                     placeholder="e.g. EMP015"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Work Email Address *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="e.g. name@rejoysolar.com"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
-                />
+              {/* Row 2: Email and Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Work Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="e.g. name@rejoysolar.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+91 98250 11223"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
+                  />
+                </div>
               </div>
 
+              {/* Row 3: Role and Department */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -677,7 +755,6 @@ export const UserManagementView: React.FC = () => {
                         'Electrical Team',
                         'Technician'
                       ].includes(newRole);
-
                       setFormData({
                         ...formData,
                         role: newRole,
@@ -687,7 +764,7 @@ export const UserManagementView: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
                   >
-                    {ROLE_DEFINITIONS.map(r => (
+                    {employeeRoleDefinitions.map(r => (
                       <option key={r.role} value={r.role}>
                         {r.role}
                       </option>
@@ -704,62 +781,48 @@ export const UserManagementView: React.FC = () => {
                     required
                     value={formData.department}
                     onChange={e => setFormData({ ...formData, department: e.target.value })}
-                    placeholder="e.g. Engineering"
+                    placeholder="e.g. Operations, Engineering"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Job Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.designation}
-                    onChange={e => setFormData({ ...formData, designation: e.target.value })}
-                    placeholder="e.g. Senior Site Engineer"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+91 98250 11223"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
-                  />
-                </div>
+              {/* Row 4: Job Designation */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Job Designation
+                </label>
+                <input
+                  type="text"
+                  value={formData.designation}
+                  onChange={e => setFormData({ ...formData, designation: e.target.value })}
+                  placeholder="e.g. Lead Site Survey Engineer"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
+                />
               </div>
 
+              {/* Password field for new accounts */}
               {!editingEmployee && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Initial Password
+                    Initial Login Password
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.tempPassword}
-                      onChange={e => setFormData({ ...formData, tempPassword: e.target.value })}
-                      placeholder="e.g. User@12345"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={formData.tempPassword}
+                    onChange={e => setFormData({ ...formData, tempPassword: e.target.value })}
+                    placeholder="User@12345"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
+                  />
                   <span className="text-[11px] text-slate-400 mt-0.5 block">
-                    The user will use this password on the /login page
+                    The employee will use this password on the login screen
                   </span>
                 </div>
               )}
 
-              {/* Toggles */}
+              {/* Operational Toggles */}
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                {/* Field Worker toggle */}
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -777,6 +840,7 @@ export const UserManagementView: React.FC = () => {
                   </div>
                 </label>
 
+                {/* Login Enabled toggle */}
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -789,26 +853,26 @@ export const UserManagementView: React.FC = () => {
                       Enable ERP Login
                     </span>
                     <span className="text-[11px] text-slate-500 block">
-                      Allow this user to sign into the system with their credentials
+                      Allow this employee to sign into the system with their credentials
                     </span>
                   </div>
                 </label>
               </div>
 
+              {/* Modal Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
-
                 <button
                   type="submit"
                   className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
                 >
-                  {editingEmployee ? 'Save Changes' : 'Create User'}
+                  {editingEmployee ? 'Save Employee' : 'Create Employee'}
                 </button>
               </div>
             </form>

@@ -73,6 +73,7 @@ export interface Customer {
   customerType: CustomerType;
   phone: string;
   email: string;
+  password?: string;
   siteAddress: string;
   city: string;
   state: string;
@@ -487,6 +488,13 @@ export interface Employee {
   accountStatus?: 'PENDING' | 'ACTIVE' | 'DISABLED';
   accountCreatedAt?: string;
   accountCreatedBy?: string;
+
+  // Customer specific linkage
+  customerId?: string;
+  customerType?: CustomerType;
+  companyName?: string;
+  city?: string;
+  address?: string;
 
   // HR Documents
   documents?: EmployeeDocument[];

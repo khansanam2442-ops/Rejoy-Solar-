@@ -96,6 +96,24 @@ const STORAGE_KEYS = {
 
 const initialWarehouses: Warehouse[] = [
   {
+    id: 'wh-bhl-01',
+    name: 'Bhilai Central Logistics Depot',
+    code: 'WH-BHL-01',
+    address: 'PLOT NO- 14, STREET NO- 14B, PRAGATI NAGAR, RISALI BHILAI',
+    city: 'BHILAI',
+    state: 'Chhattisgarh',
+    pincode: '490006',
+    contactPerson: 'Sanjay Deshmukh',
+    contactPhone: '+91 98250 12345',
+    email: 'rejoysolarpower@gmail.com',
+    capacitySqFt: 25000,
+    status: 'ACTIVE',
+    isDefault: true,
+    notes: 'Central logistics dispatch depot for Chhattisgarh & Central India solar EPC projects.',
+    createdAt: '2026-07-01T08:00:00Z',
+    updatedAt: '2026-09-01T10:00:00Z'
+  },
+  {
     id: 'wh-1',
     name: 'Central Solar Logistics Hub - Pune',
     code: 'WH-PUN-01',
@@ -108,7 +126,7 @@ const initialWarehouses: Warehouse[] = [
     email: 'pune.hub@rejoysolar.com',
     capacitySqFt: 25000,
     status: 'ACTIVE',
-    isDefault: true,
+    isDefault: false,
     notes: 'Primary bonded central warehouse stocking Tier-1 modules, string inverters, and heavy aluminium structures.',
     createdAt: '2026-07-01T08:00:00Z',
     updatedAt: '2026-09-01T10:00:00Z'
@@ -495,6 +513,26 @@ const initialEmployees: Employee[] = [
 ];
 
 const initialCustomers: Customer[] = [
+  {
+    id: 'cust-manohar',
+    name: 'Manohar Gyan Chandani',
+    companyName: 'Manohar Gyan Chandani',
+    customerType: 'Commercial',
+    phone: '+91 98271 22334',
+    email: 'manohar.chandani@gmail.com',
+    password: '123456',
+    siteAddress: 'Kadambari Nagar',
+    city: 'Durg',
+    state: 'Chhattisgarh',
+    pincode: '491001',
+    gstNumber: '',
+    electricityConsumerNo: 'CSPDCL-HT-88219',
+    sanctionedLoadKw: 25,
+    status: 'ACTIVE',
+    activeProjectId: 'proj-manohar',
+    createdAt: '2026-08-01T09:00:00Z',
+    updatedAt: '2026-09-23T10:00:00Z'
+  },
   {
     id: 'cust-1',
     name: 'ABC Industries Ltd.',
@@ -1849,11 +1887,11 @@ const initialNotifications: AppNotification[] = [
 ];
 
 const initialSettings: SystemSettings = {
-  companyName: 'Rejoy Solar Power Pvt. Ltd.',
-  companyAddress: '401-404, Solitaire Heights, SG Highway, Ahmedabad, Gujarat 380054',
-  companyPhone: '+91 79 4001 8800',
-  companyEmail: 'info@rejoysolar.com',
-  companyGst: '24AAECS9921D1Z8',
+  companyName: 'REJOY SOLAR POWER PVT. LTD',
+  companyAddress: 'PLOT NO- 14, STREET NO- 14B, PRAGATI NAGAR, RISALI BHILAI, Chhattisgarh 490006',
+  companyPhone: '+91 98250 12345',
+  companyEmail: 'rejoysolarpower@gmail.com',
+  companyGst: '22AAOCR0748K1Z5',
   logoUrl: '/logo-dark.png',
   currencySymbol: '₹',
   taxRatePercent: 18,
@@ -2643,6 +2681,56 @@ const initialPurchaseOrders: PurchaseOrder[] = [
 
 const initialBOMs: BillOfMaterials[] = [
   {
+    id: 'bom-rsp-199',
+    bomNumber: 'BOM-2026-199',
+    projectId: 'proj-manohar',
+    projectCode: 'RSP/199',
+    projectTitle: 'Residential Rooftop Solar System',
+    customerName: 'Manohar Gyan Chandani',
+    capacityKw: 3.5,
+    version: 'v1.0',
+    warehouseId: 'wh-bhl-01',
+    warehouseName: 'Bhilai Central Logistics Depot',
+    status: 'APPROVED',
+    stockAllocated: true,
+    ewayBillNumber: '871743958765',
+    createdBy: 'Project Engineer',
+    approvedBy: 'Vikram Patel',
+    approvedAt: '2026-09-23T09:30:00Z',
+    notes: 'Approved for dispatch from Bhilai Central Warehouse to Kadambari Nagar, Durg.',
+    totalCost: 107857.16,
+    items: [
+      {
+        id: 'bomi-rsp-1',
+        productId: 'prod-topcon-585',
+        productName: 'Bin -08-585 Dcr M10 Topcon Gg Module',
+        sku: 'MOD-TOPCON-585',
+        category: 'Solar Panels',
+        requiredQty: 6,
+        allocatedQty: 6,
+        unit: 'NOS',
+        estimatedUnitCost: 17142.86,
+        totalCost: 102857.16,
+        status: 'ALLOCATED'
+      },
+      {
+        id: 'bomi-rsp-2',
+        productId: 'prod-earth-kit',
+        productName: '1 Mtr Earthing Kit 6Inch',
+        sku: 'ELE-EARTH-6IN',
+        category: 'Electrical & Cables',
+        requiredQty: 1,
+        allocatedQty: 1,
+        unit: 'NOS',
+        estimatedUnitCost: 5000.00,
+        totalCost: 5000.00,
+        status: 'ALLOCATED'
+      }
+    ],
+    createdAt: '2026-09-20T08:00:00Z',
+    updatedAt: '2026-09-23T09:30:00Z'
+  },
+  {
     id: 'bom-1',
     bomNumber: 'BOM-2026-001',
     projectId: 'proj-1',
@@ -3128,6 +3216,7 @@ class StorageService {
     customerType?: 'Residential' | 'Commercial' | 'Industrial';
     phone: string;
     email?: string;
+    password?: string;
     siteAddress?: string;
     city?: string;
     capacityKw?: number;
@@ -3158,6 +3247,7 @@ class StorageService {
       customerType: customerData.customerType || 'Commercial',
       phone: customerData.phone,
       email: customerData.email || '',
+      password: customerData.password || '123456',
       siteAddress: customerData.siteAddress || '',
       city: customerData.city || 'Ahmedabad',
       state: 'Gujarat',
@@ -3226,6 +3316,26 @@ class StorageService {
       customers.unshift({ ...customer, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     }
     this.set(STORAGE_KEYS.CUSTOMERS, customers);
+  }
+
+  updateCustomerPassword(customerId: string, newPassword: string): void {
+    const customers = this.getCustomers();
+    const index = customers.findIndex(c => c.id === customerId);
+    if (index >= 0) {
+      customers[index] = {
+        ...customers[index],
+        password: newPassword,
+        updatedAt: new Date().toISOString()
+      };
+      this.set(STORAGE_KEYS.CUSTOMERS, customers);
+    }
+    if (typeof fetch !== 'undefined') {
+      fetch(`/api/customers/${encodeURIComponent(customerId)}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword })
+      }).catch(() => {});
+    }
   }
 
   // --- Projects & Workflow Automation ---
@@ -4012,18 +4122,22 @@ class StorageService {
   getNextQuotationNumber(): string {
     const quotes = this.getQuotations();
     const year = new Date().getFullYear();
-    const prefix = `QTN-${year}-`;
+    const fySuffix = (year + 1).toString().slice(-2);
+    const prefix = `RSP/QTN/${year}-${fySuffix}/`;
     let maxNum = 0;
     quotes.forEach(q => {
-      if (q.quotationNumber && q.quotationNumber.startsWith(prefix)) {
-        const parts = q.quotationNumber.split('-');
-        const n = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(n) && n > maxNum) {
-          maxNum = n;
+      if (q.quotationNumber) {
+        // Match numbers at the end of RSP/QTN/2026-27/0010 or QTN-2026-0010
+        const match = q.quotationNumber.match(/(\d+)$/);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (!isNaN(n) && n > maxNum) {
+            maxNum = n;
+          }
         }
       }
     });
-    const nextVal = (maxNum + 1).toString().padStart(3, '0');
+    const nextVal = (maxNum > 0 ? maxNum + 1 : 10).toString().padStart(4, '0');
     return `${prefix}${nextVal}`;
   }
 

@@ -346,7 +346,7 @@ export const DEFAULT_PAYMENT_MILESTONES: QuotationPaymentMilestone[] = [
 
 export const REFERENCE_5KW_QUOTATION: Quotation = {
   id: 'quote-waaree-5kw-ref',
-  quotationNumber: 'QTN-2026-001',
+  quotationNumber: 'RSP/QTN/2026-27/0010',
   quotationDate: '2026-09-21',
   customerId: 'cust-1',
   customerName: 'Shri Rameshwar Patel',

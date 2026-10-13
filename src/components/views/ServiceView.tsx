@@ -22,6 +22,21 @@ export const ServiceView: React.FC = () => {
   const { openWhatsAppModal, openImportExportModal, showToast, triggerRefresh } = useApp();
   const { currentUser, isCustomer } = useAuth();
 
+  const customers = useMemo(() => storageService.getCustomers(), []);
+  const currentCustomer = useMemo(() => {
+    if (isCustomer) {
+      return (
+        customers.find(
+          c =>
+            (currentUser?.email && c.email?.toLowerCase() === currentUser.email?.toLowerCase()) ||
+            (currentUser?.phone && c.phone === currentUser.phone) ||
+            (currentUser?.name && c.name?.toLowerCase() === currentUser.name?.toLowerCase())
+        ) || customers[0]
+      );
+    }
+    return null;
+  }, [customers, isCustomer, currentUser]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
   const [ticketForm, setTicketForm] = useState({
@@ -29,11 +44,20 @@ export const ServiceView: React.FC = () => {
     projectId: 'proj-1',
     category: 'Inverter Error / Offline' as const,
     issue: 'Inverter #2 tripping with Error 302 grid over-voltage during peak sunshine hours.',
-    priority: 'HIGH' as Priority,
-    assignedToName: 'Ketan Solanki'
+    priority: 'HIGH' as Priority
   });
 
-  const tickets = useMemo(() => storageService.getServiceTickets(), []);
+  const tickets = useMemo(() => {
+    const all = storageService.getServiceTickets();
+    if (isCustomer && currentCustomer) {
+      return all.filter(
+        t =>
+          t.customerId === currentCustomer.id ||
+          t.customerName.toLowerCase() === currentCustomer.name.toLowerCase()
+      );
+    }
+    return all;
+  }, [isCustomer, currentCustomer]);
 
   const filteredTickets = useMemo(() => {
     return tickets.filter(t =>
@@ -46,17 +70,22 @@ export const ServiceView: React.FC = () => {
 
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
+    const activeCustName = isCustomer && currentCustomer ? currentCustomer.name : ticketForm.customerName;
+    const activeCustId = isCustomer && currentCustomer ? currentCustomer.id : 'cust-1';
+    const activeProjId = isCustomer && currentCustomer?.activeProjectId ? currentCustomer.activeProjectId : ticketForm.projectId;
+
     const newTicket: ServiceTicket = {
       id: `srv-${Date.now()}`,
       ticketId: `SRV-2026-${Math.floor(100 + Math.random() * 900)}`,
-      customerId: 'cust-1',
-      customerName: ticketForm.customerName,
-      projectId: ticketForm.projectId,
+      customerId: activeCustId,
+      customerName: activeCustName,
+      projectId: activeProjId,
       category: ticketForm.category,
       issue: ticketForm.issue,
       priority: ticketForm.priority,
       status: 'OPEN',
-      assignedToName: ticketForm.assignedToName,
+      assignedToName: 'Unassigned',
+      assignedTechnicianName: 'To be assigned',
       createdAt: new Date().toISOString().slice(0, 10),
       visitScheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     };
@@ -157,7 +186,7 @@ export const ServiceView: React.FC = () => {
               <div className="space-y-1.5 mt-3 text-xs text-slate-500">
                 <p className="flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Technician: <strong>{t.assignedToName}</strong></span>
+                  <span>Technician: <strong>{t.assignedToName || t.assignedTechnicianName || 'Unassigned'}</strong></span>
                 </p>
                 {t.visitScheduledDate && (
                   <p className="flex items-center gap-1.5">
@@ -216,9 +245,12 @@ export const ServiceView: React.FC = () => {
                 <input
                   type="text"
                   required
-                  value={ticketForm.customerName}
+                  value={isCustomer && currentCustomer ? currentCustomer.name : ticketForm.customerName}
+                  disabled={Boolean(isCustomer && currentCustomer)}
                   onChange={e => setTicketForm({ ...ticketForm, customerName: e.target.value })}
-                  className="w-full text-xs border border-slate-200 rounded-xl p-2.5"
+                  className={`w-full text-xs border border-slate-200 rounded-xl p-2.5 ${
+                    isCustomer && currentCustomer ? 'bg-slate-50 text-slate-600 font-medium cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
 
@@ -261,16 +293,6 @@ export const ServiceView: React.FC = () => {
                   onChange={e => setTicketForm({ ...ticketForm, issue: e.target.value })}
                   className="w-full text-xs border border-slate-200 rounded-xl p-2.5"
                   placeholder="Describe alarm code, tripping behavior, or physical damage..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Field Technician</label>
-                <input
-                  type="text"
-                  value={ticketForm.assignedToName}
-                  onChange={e => setTicketForm({ ...ticketForm, assignedToName: e.target.value })}
-                  className="w-full text-xs border border-slate-200 rounded-xl p-2.5"
                 />
               </div>
 
