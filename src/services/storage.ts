@@ -3038,26 +3038,86 @@ const initialStockMovements: StockMovement[] = [
   }
 ];
 
+const KEY_TO_COLLECTION: Record<string, string> = {
+  [STORAGE_KEYS.LEADS]: 'leads',
+  [STORAGE_KEYS.CUSTOMERS]: 'customers',
+  [STORAGE_KEYS.PROJECTS]: 'projects',
+  [STORAGE_KEYS.PAYMENTS]: 'payments',
+  [STORAGE_KEYS.EXPENSES]: 'expenses',
+  [STORAGE_KEYS.EMPLOYEES]: 'employees',
+  [STORAGE_KEYS.ATTENDANCE]: 'attendance',
+  [STORAGE_KEYS.PAYSLIPS]: 'payslips',
+  [STORAGE_KEYS.HOLIDAYS]: 'holidays',
+  [STORAGE_KEYS.SERVICE_TICKETS]: 'service_tickets',
+  [STORAGE_KEYS.AMC_CONTRACTS]: 'amc_contracts',
+  [STORAGE_KEYS.NOTIFICATIONS]: 'notifications',
+  [STORAGE_KEYS.SETTINGS]: 'settings',
+  [STORAGE_KEYS.SURVEYS]: 'surveys',
+  [STORAGE_KEYS.QUOTATIONS]: 'quotations',
+  [STORAGE_KEYS.PRODUCTS]: 'products',
+  [STORAGE_KEYS.VENDORS]: 'vendors',
+  [STORAGE_KEYS.PURCHASE_ORDERS]: 'purchase_orders',
+  [STORAGE_KEYS.BOMS]: 'boms',
+  [STORAGE_KEYS.SALES_INVOICES]: 'sales_invoices',
+  [STORAGE_KEYS.STOCK_MOVEMENTS]: 'stock_movements',
+  [STORAGE_KEYS.ACL_CONFIG]: 'acl_config',
+  [STORAGE_KEYS.ACL_AUDIT_LOGS]: 'acl_audit_logs',
+  [STORAGE_KEYS.WAREHOUSES]: 'warehouses',
+  [STORAGE_KEYS.STOCK_AUDITS]: 'stock_audits'
+};
+
 class StorageService {
-  private get<T>(key: string, defaultValue: T): T {
-    try {
-      const stored = localStorage.getItem(key);
-      if (!stored) {
-        localStorage.setItem(key, JSON.stringify(defaultValue));
-        return defaultValue;
-      }
-      return JSON.parse(stored) as T;
-    } catch {
-      return defaultValue;
+  private memStore = new Map<string, any>();
+  private isHydrated: boolean = false;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.hydrateFromBackend();
     }
   }
 
-  private set<T>(key: string, data: T): void {
+  public async hydrateFromBackend(): Promise<void> {
+    if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(key, JSON.stringify(data));
-      window.dispatchEvent(new Event('solarpulse_storage_updated'));
+      const res = await fetch('/api/bootstrap');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          Object.entries(KEY_TO_COLLECTION).forEach(([storageKey, collectionKey]) => {
+            const backendItems = json.data[collectionKey];
+            if (backendItems !== undefined) {
+              this.memStore.set(storageKey, backendItems);
+            }
+          });
+          this.isHydrated = true;
+          window.dispatchEvent(new Event('solarpulse_storage_updated'));
+        }
+      }
     } catch (e) {
-      console.error('Storage set error:', e);
+      console.warn('[Storage] Backend bootstrap notice:', e);
+    }
+  }
+
+  private get<T>(key: string, defaultValue: T): T {
+    if (this.memStore.has(key)) {
+      return this.memStore.get(key) as T;
+    }
+    this.memStore.set(key, defaultValue);
+    return defaultValue;
+  }
+
+  private set<T>(key: string, data: T): void {
+    this.memStore.set(key, data);
+    const collection = KEY_TO_COLLECTION[key];
+    if (collection && typeof window !== 'undefined') {
+      fetch('/api/sync/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collection, items: data })
+      }).catch(e => {
+        console.warn(`[Storage] Failed to sync ${collection} to backend API:`, e);
+      });
+      window.dispatchEvent(new Event('solarpulse_storage_updated'));
     }
   }
 
@@ -4960,32 +5020,18 @@ class StorageService {
 
   // Reset demo data to default fresh state
   resetAllData(): void {
-    localStorage.removeItem(STORAGE_KEYS.LEADS);
-    localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-    localStorage.removeItem(STORAGE_KEYS.PROJECTS);
-    localStorage.removeItem(STORAGE_KEYS.PAYMENTS);
-    localStorage.removeItem(STORAGE_KEYS.EXPENSES);
-    localStorage.removeItem(STORAGE_KEYS.EMPLOYEES);
-    localStorage.removeItem(STORAGE_KEYS.ATTENDANCE);
-    localStorage.removeItem(STORAGE_KEYS.PAYSLIPS);
-    localStorage.removeItem(STORAGE_KEYS.HOLIDAYS);
-    localStorage.removeItem(STORAGE_KEYS.SERVICE_TICKETS);
-    localStorage.removeItem(STORAGE_KEYS.AMC_CONTRACTS);
-    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem(STORAGE_KEYS.SURVEYS);
-    localStorage.removeItem(STORAGE_KEYS.QUOTATIONS);
-    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
-    localStorage.removeItem(STORAGE_KEYS.VENDORS);
-    localStorage.removeItem(STORAGE_KEYS.PURCHASE_ORDERS);
-    localStorage.removeItem(STORAGE_KEYS.BOMS);
-    localStorage.removeItem(STORAGE_KEYS.SALES_INVOICES);
-    localStorage.removeItem(STORAGE_KEYS.STOCK_MOVEMENTS);
-    localStorage.removeItem(STORAGE_KEYS.ACL_CONFIG);
-    localStorage.removeItem(STORAGE_KEYS.ACL_AUDIT_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.WAREHOUSES);
-    localStorage.removeItem(STORAGE_KEYS.STOCK_AUDITS);
-    window.location.reload();
+    this.memStore.clear();
+    if (typeof window !== 'undefined') {
+      fetch('/api/db/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+        .catch(() => {})
+        .finally(() => {
+          window.location.reload();
+        });
+    }
   }
 }
 

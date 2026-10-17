@@ -33,7 +33,7 @@ class ApiClient {
         host: 'localhost',
         database: 'solarpulse_erp',
         port: 3306,
-        mode: 'STANDBY_LOCAL_SYNC',
+        mode: 'STANDBY_PERSISTENCE_MODE',
         dumpAvailable: true,
         dumpPath: '/database.sql',
         message: 'Could not contact backend API: ' + e.message
@@ -69,6 +69,31 @@ class ApiClient {
 
   getSqlDumpDownloadUrl(): string {
     return `${this.baseUrl}/db/dump.sql`;
+  }
+
+  // --- Master Bootstrap Data ---
+  async getBootstrapData(): Promise<Record<string, any> | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/bootstrap`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async syncPush(collection: string, payload: { item?: any; items?: any[]; action?: string }): Promise<any> {
+    try {
+      const res = await fetch(`${this.baseUrl}/sync/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collection, ...payload })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 
   // --- Auth & Customer Portal ---
@@ -125,6 +150,17 @@ class ApiClient {
     }
   }
 
+  async deleteCustomer(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/customers/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // --- Leads ---
   async getLeads(): Promise<any[]> {
     try {
@@ -150,6 +186,17 @@ class ApiClient {
     }
   }
 
+  async deleteLead(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/leads/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // --- Projects ---
   async getProjects(): Promise<any[]> {
     try {
@@ -172,6 +219,53 @@ class ApiClient {
       return data.data || proj;
     } catch {
       return proj;
+    }
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/projects/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // --- Employees ---
+  async getEmployees(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/employees`);
+      const data = await res.json();
+      return data.data || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async saveEmployee(emp: any): Promise<any> {
+    try {
+      const res = await fetch(`${this.baseUrl}/employees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emp)
+      });
+      const data = await res.json();
+      return data.data || emp;
+    } catch {
+      return emp;
+    }
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/employees/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 }

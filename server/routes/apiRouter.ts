@@ -12,53 +12,72 @@ dbManager.init().catch(err => {
   console.warn('[DB Manager] Startup notice:', err);
 });
 
-// Seed in-memory fallback from storageService
+// Seed in-memory backend database from initial baseline if empty
 try {
-  const demoUsers: any[] = DEMO_ACCOUNTS.map(a => ({
-    id: a.profile.id,
-    name: a.name,
-    email: a.email,
-    password: a.password || '123456',
-    role: a.role,
-    phone: a.profile.phone || '+91 98000 00000',
-    department: a.department,
-    designation: a.profile.designation,
-    employeeId: a.profile.employeeId,
-    isFieldWorker: Boolean(a.isFieldWorker)
-  }));
-  demoUsers.push({
-    id: 'usr-admin-master',
-    name: 'Vikram Patel',
-    email: 'admin@rejoysolar.com',
-    password: '123456',
-    role: 'Admin',
-    phone: '+91 98250 11223',
-    department: 'Administration',
-    designation: 'Managing Director',
-    employeeId: 'EMP001',
-    isFieldWorker: false
+  const currentUsers = dbManager.getFallbackItems('users');
+  if (currentUsers.length === 0) {
+    const demoUsers: any[] = DEMO_ACCOUNTS.map(a => ({
+      id: a.profile.id,
+      name: a.name,
+      email: a.email,
+      password: a.password || '123456',
+      role: a.role,
+      phone: a.profile.phone || '+91 98000 00000',
+      department: a.department,
+      designation: a.profile.designation,
+      employeeId: a.profile.employeeId,
+      isFieldWorker: Boolean(a.isFieldWorker)
+    }));
+    demoUsers.push({
+      id: 'usr-admin-master',
+      name: 'Vikram Patel',
+      email: 'admin@rejoysolar.com',
+      password: '123456',
+      role: 'Admin',
+      phone: '+91 98250 11223',
+      department: 'Administration',
+      designation: 'Managing Director',
+      employeeId: 'EMP001',
+      isFieldWorker: false
+    });
+    dbManager.setFallbackItems('users', demoUsers);
+  }
+
+  const collectionsToInit = [
+    { key: 'customers', fn: () => storageService.getCustomers() },
+    { key: 'leads', fn: () => storageService.getLeads() },
+    { key: 'projects', fn: () => storageService.getProjects() },
+    { key: 'employees', fn: () => storageService.getEmployees() },
+    { key: 'payments', fn: () => storageService.getPayments() },
+    { key: 'expenses', fn: () => storageService.getExpenses() },
+    { key: 'attendance', fn: () => storageService.getAttendance() },
+    { key: 'payslips', fn: () => storageService.getPayslips() },
+    { key: 'holidays', fn: () => storageService.getHolidays() },
+    { key: 'service_tickets', fn: () => storageService.getServiceTickets() },
+    { key: 'amc_contracts', fn: () => storageService.getAMCContracts() },
+    { key: 'products', fn: () => storageService.getProducts() },
+    { key: 'vendors', fn: () => storageService.getVendors() },
+    { key: 'purchase_orders', fn: () => storageService.getPurchaseOrders() },
+    { key: 'boms', fn: () => storageService.getBOMs() },
+    { key: 'sales_invoices', fn: () => storageService.getSalesInvoices() },
+    { key: 'warehouses', fn: () => storageService.getWarehouses() },
+    { key: 'stock_movements', fn: () => storageService.getStockMovements() },
+    { key: 'stock_audits', fn: () => storageService.getStockAudits() },
+    { key: 'quotations', fn: () => storageService.getQuotations() },
+    { key: 'surveys', fn: () => storageService.getSurveys() },
+    { key: 'notifications', fn: () => storageService.getNotifications() }
+  ];
+
+  collectionsToInit.forEach(({ key, fn }) => {
+    if (dbManager.getFallbackItems(key).length === 0) {
+      try {
+        const items = fn();
+        if (Array.isArray(items) && items.length > 0) {
+          dbManager.setFallbackItems(key, items);
+        }
+      } catch {}
+    }
   });
-  dbManager.setFallbackItems('users', demoUsers);
-  dbManager.setFallbackItems('customers', storageService.getCustomers());
-  dbManager.setFallbackItems('leads', storageService.getLeads());
-  dbManager.setFallbackItems('projects', storageService.getProjects());
-  dbManager.setFallbackItems('employees', storageService.getEmployees());
-  dbManager.setFallbackItems('payments', storageService.getPayments());
-  dbManager.setFallbackItems('expenses', storageService.getExpenses());
-  dbManager.setFallbackItems('attendance', storageService.getAttendance());
-  dbManager.setFallbackItems('payslips', storageService.getPayslips());
-  dbManager.setFallbackItems('holidays', storageService.getHolidays());
-  dbManager.setFallbackItems('service_tickets', storageService.getServiceTickets());
-  dbManager.setFallbackItems('amc_contracts', storageService.getAMCContracts());
-  dbManager.setFallbackItems('products', storageService.getProducts());
-  dbManager.setFallbackItems('vendors', storageService.getVendors());
-  dbManager.setFallbackItems('purchase_orders', storageService.getPurchaseOrders());
-  dbManager.setFallbackItems('boms', storageService.getBOMs());
-  dbManager.setFallbackItems('sales_invoices', storageService.getSalesInvoices());
-  dbManager.setFallbackItems('warehouses', storageService.getWarehouses());
-  dbManager.setFallbackItems('stock_movements', storageService.getStockMovements());
-  dbManager.setFallbackItems('stock_audits', storageService.getStockAudits());
-  dbManager.setFallbackItems('notifications', storageService.getNotifications());
 } catch (e) {
   console.warn('Initial storage seed notice:', e);
 }
@@ -74,8 +93,8 @@ apiRouter.get('/db/status', (_req: Request, res: Response) => {
     success: true,
     ...status,
     message: status.connected
-      ? `Connected to MySQL database "${status.database}" on ${status.host}`
-      : 'Operating in High-Performance Local Mode. Configure MySQL credentials in .env to connect live database.',
+      ? `Connected to MySQL database "${status.database}" on ${status.host}:${status.port}`
+      : `Operating with server-side persistent database cache. Connect MySQL via .env or Database Settings.`,
     tables: [
       'solar_users', 'solar_customers', 'solar_leads', 'solar_projects',
       'solar_project_stages', 'solar_site_surveys', 'solar_quotations',
@@ -122,10 +141,64 @@ apiRouter.get(['/db/dump.sql', '/db/export-sql'], (_req: Request, res: Response)
 });
 
 // ==========================================================
-// 2. AUTHENTICATION APIS (MYSQL BACKED)
+// 2. MASTER BOOTSTRAP API (ONE ROUND-TRIP HYDRATION)
 // ==========================================================
 
-// Login (Employees & Customers)
+apiRouter.get('/bootstrap', async (_req: Request, res: Response) => {
+  try {
+    const data = await dbManager.getAllData();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      data
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Bootstrap load error' });
+  }
+});
+
+// Bulk sync endpoint for data updates
+apiRouter.post('/sync/push', async (req: Request, res: Response) => {
+  try {
+    const { collection, item, items, action } = req.body || {};
+    if (!collection) {
+      res.status(400).json({ success: false, message: 'Collection name is required.' });
+      return;
+    }
+
+    if (items && Array.isArray(items)) {
+      dbManager.setFallbackItems(collection, items);
+      res.json({ success: true, count: items.length, message: `Synced ${collection}` });
+      return;
+    }
+
+    if (item && action === 'delete') {
+      const current = dbManager.getFallbackItems(collection).filter((i: any) => i.id !== item.id);
+      dbManager.setFallbackItems(collection, current);
+      res.json({ success: true, message: `Deleted from ${collection}` });
+      return;
+    }
+
+    if (item) {
+      const current = dbManager.getFallbackItems(collection);
+      const idx = current.findIndex((i: any) => i.id === item.id);
+      if (idx >= 0) current[idx] = { ...current[idx], ...item };
+      else current.unshift(item);
+      dbManager.setFallbackItems(collection, current);
+      res.json({ success: true, data: item, message: `Saved to ${collection}` });
+      return;
+    }
+
+    res.status(400).json({ success: false, message: 'Invalid sync payload.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Sync error' });
+  }
+});
+
+// ==========================================================
+// 3. AUTHENTICATION APIS (MYSQL BACKED)
+// ==========================================================
+
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
@@ -149,7 +222,6 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Customer Portal Login
 apiRouter.post('/auth/customer-login', async (req: Request, res: Response) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
@@ -171,7 +243,6 @@ apiRouter.post('/auth/customer-login', async (req: Request, res: Response) => {
   }
 });
 
-// Update Customer Password in MySQL
 apiRouter.put('/customers/:id/password', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { password } = req.body || {};
@@ -185,7 +256,7 @@ apiRouter.put('/customers/:id/password', async (req: Request, res: Response) => 
 });
 
 // ==========================================================
-// 3. CUSTOMERS MODULE API
+// 4. CUSTOMERS MODULE API
 // ==========================================================
 
 apiRouter.get('/customers', async (_req: Request, res: Response) => {
@@ -219,13 +290,12 @@ apiRouter.put('/customers/:id', async (req: Request, res: Response) => {
 
 apiRouter.delete('/customers/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const items = dbManager.getFallbackItems('customers').filter(c => c.id !== id);
-  dbManager.setFallbackItems('customers', items);
+  await dbManager.deleteCustomer(id);
   res.json({ success: true, message: 'Customer deleted.' });
 });
 
 // ==========================================================
-// 4. LEADS MODULE API (CRM)
+// 5. LEADS MODULE API (CRM)
 // ==========================================================
 
 apiRouter.get('/leads', async (_req: Request, res: Response) => {
@@ -257,13 +327,12 @@ apiRouter.put('/leads/:id', async (req: Request, res: Response) => {
 
 apiRouter.delete('/leads/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const items = dbManager.getFallbackItems('leads').filter(l => l.id !== id);
-  dbManager.setFallbackItems('leads', items);
+  await dbManager.deleteLead(id);
   res.json({ success: true, message: 'Lead deleted.' });
 });
 
 // ==========================================================
-// 5. PROJECTS MODULE API
+// 6. PROJECTS MODULE API
 // ==========================================================
 
 apiRouter.get('/projects', async (_req: Request, res: Response) => {
@@ -289,8 +358,106 @@ apiRouter.put('/projects/:id', async (req: Request, res: Response) => {
   res.json({ success: true, data: updated });
 });
 
+apiRouter.delete('/projects/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  await dbManager.deleteProject(id);
+  res.json({ success: true, message: 'Project deleted.' });
+});
+
 // ==========================================================
-// 6. INVENTORY & SUPPLY CHAIN ERP APIS
+// 7. EMPLOYEES & HRMS MODULE API
+// ==========================================================
+
+apiRouter.get('/employees', async (_req: Request, res: Response) => {
+  const items = await dbManager.getEmployees();
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/employees', async (req: Request, res: Response) => {
+  const payload = req.body;
+  if (!payload || !payload.name || !payload.phone) {
+    res.status(400).json({ success: false, message: 'Employee name and phone are required.' });
+    return;
+  }
+  const emp = {
+    ...payload,
+    id: payload.id || `emp-${Date.now()}`,
+    employeeCode: payload.employeeCode || `EMP00${dbManager.getFallbackItems('employees').length + 1}`,
+    createdAt: new Date().toISOString()
+  };
+  const saved = await dbManager.saveEmployee(emp);
+  res.status(201).json({ success: true, data: saved });
+});
+
+apiRouter.put('/employees/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const payload = req.body;
+  const updated = await dbManager.saveEmployee({ ...payload, id });
+  res.json({ success: true, data: updated });
+});
+
+apiRouter.delete('/employees/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  await dbManager.deleteEmployee(id);
+  res.json({ success: true, message: 'Employee deleted.' });
+});
+
+// Attendance
+apiRouter.get('/attendance', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('attendance');
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/attendance', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('attendance');
+  const att = { ...req.body, id: req.body.id || `att-${Date.now()}` };
+  const idx = items.findIndex(a => a.id === att.id);
+  if (idx >= 0) items[idx] = att;
+  else items.unshift(att);
+  dbManager.setFallbackItems('attendance', items);
+  res.status(201).json({ success: true, data: att });
+});
+
+// Payslips
+apiRouter.get('/payslips', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('payslips');
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/payslips', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('payslips');
+  const ps = { ...req.body, id: req.body.id || `ps-${Date.now()}` };
+  const idx = items.findIndex(p => p.id === ps.id);
+  if (idx >= 0) items[idx] = ps;
+  else items.unshift(ps);
+  dbManager.setFallbackItems('payslips', items);
+  res.status(201).json({ success: true, data: ps });
+});
+
+// Holidays
+apiRouter.get('/holidays', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('holidays');
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/holidays', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('holidays');
+  const h = { ...req.body, id: req.body.id || `hol-${Date.now()}` };
+  const idx = items.findIndex(item => item.id === h.id);
+  if (idx >= 0) items[idx] = h;
+  else items.push(h);
+  dbManager.setFallbackItems('holidays', items);
+  res.status(201).json({ success: true, data: h });
+});
+
+apiRouter.delete('/holidays/:id', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('holidays').filter(h => h.id !== req.params.id);
+  dbManager.setFallbackItems('holidays', items);
+  res.json({ success: true, message: 'Holiday deleted.' });
+});
+
+// ==========================================================
+// 8. INVENTORY & SUPPLY CHAIN MODULE APIS
 // ==========================================================
 
 // Products
@@ -302,9 +469,26 @@ apiRouter.get('/products', (_req: Request, res: Response) => {
 apiRouter.post('/products', (req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('products');
   const prod = { ...req.body, id: req.body.id || `prod-${Date.now()}` };
-  items.unshift(prod);
+  const idx = items.findIndex(p => p.id === prod.id);
+  if (idx >= 0) items[idx] = prod;
+  else items.unshift(prod);
   dbManager.setFallbackItems('products', items);
   res.status(201).json({ success: true, data: prod });
+});
+
+apiRouter.put('/products/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const items = dbManager.getFallbackItems('products');
+  const idx = items.findIndex(p => p.id === id);
+  if (idx >= 0) items[idx] = { ...items[idx], ...req.body };
+  dbManager.setFallbackItems('products', items);
+  res.json({ success: true, data: items[idx] || req.body });
+});
+
+apiRouter.delete('/products/:id', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('products').filter(p => p.id !== req.params.id);
+  dbManager.setFallbackItems('products', items);
+  res.json({ success: true, message: 'Product deleted.' });
 });
 
 // Vendors
@@ -316,9 +500,26 @@ apiRouter.get('/vendors', (_req: Request, res: Response) => {
 apiRouter.post('/vendors', (req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('vendors');
   const v = { ...req.body, id: req.body.id || `ven-${Date.now()}` };
-  items.unshift(v);
+  const idx = items.findIndex(x => x.id === v.id);
+  if (idx >= 0) items[idx] = v;
+  else items.unshift(v);
   dbManager.setFallbackItems('vendors', items);
   res.status(201).json({ success: true, data: v });
+});
+
+apiRouter.put('/vendors/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const items = dbManager.getFallbackItems('vendors');
+  const idx = items.findIndex(v => v.id === id);
+  if (idx >= 0) items[idx] = { ...items[idx], ...req.body };
+  dbManager.setFallbackItems('vendors', items);
+  res.json({ success: true, data: items[idx] || req.body });
+});
+
+apiRouter.delete('/vendors/:id', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('vendors').filter(v => v.id !== req.params.id);
+  dbManager.setFallbackItems('vendors', items);
+  res.json({ success: true, message: 'Vendor deleted.' });
 });
 
 // Purchase Orders
@@ -330,9 +531,20 @@ apiRouter.get('/purchase-orders', (_req: Request, res: Response) => {
 apiRouter.post('/purchase-orders', (req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('purchase_orders');
   const po = { ...req.body, id: req.body.id || `po-${Date.now()}` };
-  items.unshift(po);
+  const idx = items.findIndex(p => p.id === po.id);
+  if (idx >= 0) items[idx] = po;
+  else items.unshift(po);
   dbManager.setFallbackItems('purchase_orders', items);
   res.status(201).json({ success: true, data: po });
+});
+
+apiRouter.put('/purchase-orders/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const items = dbManager.getFallbackItems('purchase_orders');
+  const idx = items.findIndex(p => p.id === id);
+  if (idx >= 0) items[idx] = { ...items[idx], ...req.body };
+  dbManager.setFallbackItems('purchase_orders', items);
+  res.json({ success: true, data: items[idx] || req.body });
 });
 
 // Bill of Materials (BOM)
@@ -344,12 +556,23 @@ apiRouter.get('/boms', (_req: Request, res: Response) => {
 apiRouter.post('/boms', (req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('boms');
   const bom = { ...req.body, id: req.body.id || `bom-${Date.now()}` };
-  items.unshift(bom);
+  const idx = items.findIndex(b => b.id === bom.id);
+  if (idx >= 0) items[idx] = bom;
+  else items.unshift(bom);
   dbManager.setFallbackItems('boms', items);
   res.status(201).json({ success: true, data: bom });
 });
 
-// Sales Invoices (with e-Way Bill support)
+apiRouter.put('/boms/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const items = dbManager.getFallbackItems('boms');
+  const idx = items.findIndex(b => b.id === id);
+  if (idx >= 0) items[idx] = { ...items[idx], ...req.body };
+  dbManager.setFallbackItems('boms', items);
+  res.json({ success: true, data: items[idx] || req.body });
+});
+
+// Sales Invoices
 apiRouter.get('/sales-invoices', (_req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('sales_invoices');
   res.json({ success: true, count: items.length, data: items });
@@ -358,9 +581,20 @@ apiRouter.get('/sales-invoices', (_req: Request, res: Response) => {
 apiRouter.post('/sales-invoices', (req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('sales_invoices');
   const inv = { ...req.body, id: req.body.id || `inv-${Date.now()}` };
-  items.unshift(inv);
+  const idx = items.findIndex(i => i.id === inv.id);
+  if (idx >= 0) items[idx] = inv;
+  else items.unshift(inv);
   dbManager.setFallbackItems('sales_invoices', items);
   res.status(201).json({ success: true, data: inv });
+});
+
+apiRouter.put('/sales-invoices/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const items = dbManager.getFallbackItems('sales_invoices');
+  const idx = items.findIndex(i => i.id === id);
+  if (idx >= 0) items[idx] = { ...items[idx], ...req.body };
+  dbManager.setFallbackItems('sales_invoices', items);
+  res.json({ success: true, data: items[idx] || req.body });
 });
 
 // Warehouses
@@ -369,10 +603,28 @@ apiRouter.get('/warehouses', (_req: Request, res: Response) => {
   res.json({ success: true, count: items.length, data: items });
 });
 
+apiRouter.post('/warehouses', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('warehouses');
+  const wh = { ...req.body, id: req.body.id || `wh-${Date.now()}` };
+  const idx = items.findIndex(w => w.id === wh.id);
+  if (idx >= 0) items[idx] = wh;
+  else items.unshift(wh);
+  dbManager.setFallbackItems('warehouses', items);
+  res.status(201).json({ success: true, data: wh });
+});
+
 // Stock Movements
 apiRouter.get('/stock-movements', (_req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('stock_movements');
   res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/stock-movements', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('stock_movements');
+  const sm = { ...req.body, id: req.body.id || `sm-${Date.now()}` };
+  items.unshift(sm);
+  dbManager.setFallbackItems('stock_movements', items);
+  res.status(201).json({ success: true, data: sm });
 });
 
 // Stock Audits
@@ -381,32 +633,59 @@ apiRouter.get('/stock-audits', (_req: Request, res: Response) => {
   res.json({ success: true, count: items.length, data: items });
 });
 
-// ==========================================================
-// 7. HRMS MODULE APIS
-// ==========================================================
-
-apiRouter.get('/employees', (_req: Request, res: Response) => {
-  const items = dbManager.getFallbackItems('employees');
-  res.json({ success: true, count: items.length, data: items });
-});
-
-apiRouter.get('/attendance', (_req: Request, res: Response) => {
-  const items = dbManager.getFallbackItems('attendance');
-  res.json({ success: true, count: items.length, data: items });
-});
-
-apiRouter.get('/payslips', (_req: Request, res: Response) => {
-  const items = dbManager.getFallbackItems('payslips');
-  res.json({ success: true, count: items.length, data: items });
-});
-
-apiRouter.get('/holidays', (_req: Request, res: Response) => {
-  const items = dbManager.getFallbackItems('holidays');
-  res.json({ success: true, count: items.length, data: items });
+apiRouter.post('/stock-audits', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('stock_audits');
+  const sa = { ...req.body, id: req.body.id || `audit-${Date.now()}` };
+  const idx = items.findIndex(s => s.id === sa.id);
+  if (idx >= 0) items[idx] = sa;
+  else items.unshift(sa);
+  dbManager.setFallbackItems('stock_audits', items);
+  res.status(201).json({ success: true, data: sa });
 });
 
 // ==========================================================
-// 8. FINANCE & BILLING APIS
+// 9. QUOTATIONS & SITE SURVEYS
+// ==========================================================
+
+apiRouter.get('/quotations', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('quotations');
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/quotations', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('quotations');
+  const q = { ...req.body, id: req.body.id || `qtn-${Date.now()}` };
+  const idx = items.findIndex(item => item.id === q.id);
+  if (idx >= 0) items[idx] = q;
+  else items.unshift(q);
+  dbManager.setFallbackItems('quotations', items);
+  res.status(201).json({ success: true, data: q });
+});
+
+apiRouter.delete('/quotations/:id', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('quotations').filter(q => q.id !== req.params.id);
+  dbManager.setFallbackItems('quotations', items);
+  res.json({ success: true, message: 'Quotation deleted.' });
+});
+
+// Site Surveys
+apiRouter.get('/surveys', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('surveys');
+  res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/surveys', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('surveys');
+  const s = { ...req.body, id: req.body.id || `sur-${Date.now()}` };
+  const idx = items.findIndex(item => item.id === s.id);
+  if (idx >= 0) items[idx] = s;
+  else items.unshift(s);
+  dbManager.setFallbackItems('surveys', items);
+  res.status(201).json({ success: true, data: s });
+});
+
+// ==========================================================
+// 10. FINANCE (PAYMENTS & EXPENSES)
 // ==========================================================
 
 apiRouter.get('/payments', (_req: Request, res: Response) => {
@@ -414,13 +693,33 @@ apiRouter.get('/payments', (_req: Request, res: Response) => {
   res.json({ success: true, count: items.length, data: items });
 });
 
+apiRouter.post('/payments', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('payments');
+  const pay = { ...req.body, id: req.body.id || `pay-${Date.now()}` };
+  const idx = items.findIndex(p => p.id === pay.id);
+  if (idx >= 0) items[idx] = pay;
+  else items.unshift(pay);
+  dbManager.setFallbackItems('payments', items);
+  res.status(201).json({ success: true, data: pay });
+});
+
 apiRouter.get('/expenses', (_req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('expenses');
   res.json({ success: true, count: items.length, data: items });
 });
 
+apiRouter.post('/expenses', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('expenses');
+  const ex = { ...req.body, id: req.body.id || `exp-${Date.now()}` };
+  const idx = items.findIndex(e => e.id === ex.id);
+  if (idx >= 0) items[idx] = ex;
+  else items.unshift(ex);
+  dbManager.setFallbackItems('expenses', items);
+  res.status(201).json({ success: true, data: ex });
+});
+
 // ==========================================================
-// 9. SERVICE TICKETS & AMC APIS
+// 11. SERVICE TICKETS & AMC CONTRACTS
 // ==========================================================
 
 apiRouter.get('/service-tickets', (_req: Request, res: Response) => {
@@ -428,16 +727,70 @@ apiRouter.get('/service-tickets', (_req: Request, res: Response) => {
   res.json({ success: true, count: items.length, data: items });
 });
 
+apiRouter.post('/service-tickets', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('service_tickets');
+  const tk = { ...req.body, id: req.body.id || `tk-${Date.now()}` };
+  const idx = items.findIndex(t => t.id === tk.id);
+  if (idx >= 0) items[idx] = tk;
+  else items.unshift(tk);
+  dbManager.setFallbackItems('service_tickets', items);
+  res.status(201).json({ success: true, data: tk });
+});
+
 apiRouter.get('/amc-contracts', (_req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('amc_contracts');
   res.json({ success: true, count: items.length, data: items });
 });
 
+apiRouter.post('/amc-contracts', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('amc_contracts');
+  const amc = { ...req.body, id: req.body.id || `amc-${Date.now()}` };
+  const idx = items.findIndex(a => a.id === amc.id);
+  if (idx >= 0) items[idx] = amc;
+  else items.unshift(amc);
+  dbManager.setFallbackItems('amc_contracts', items);
+  res.status(201).json({ success: true, data: amc });
+});
+
 // ==========================================================
-// 10. NOTIFICATIONS & SETTINGS APIS
+// 12. NOTIFICATIONS & SETTINGS
 // ==========================================================
 
 apiRouter.get('/notifications', (_req: Request, res: Response) => {
   const items = dbManager.getFallbackItems('notifications');
   res.json({ success: true, count: items.length, data: items });
+});
+
+apiRouter.post('/notifications', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('notifications');
+  const n = { ...req.body, id: req.body.id || `notif-${Date.now()}` };
+  items.unshift(n);
+  dbManager.setFallbackItems('notifications', items);
+  res.status(201).json({ success: true, data: n });
+});
+
+apiRouter.put('/notifications/:id/read', (req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('notifications');
+  const target = items.find(n => n.id === req.params.id);
+  if (target) target.isRead = true;
+  dbManager.setFallbackItems('notifications', items);
+  res.json({ success: true });
+});
+
+apiRouter.put('/notifications/read-all', (_req: Request, res: Response) => {
+  const items = dbManager.getFallbackItems('notifications');
+  items.forEach(n => { n.isRead = true; });
+  dbManager.setFallbackItems('notifications', items);
+  res.json({ success: true });
+});
+
+apiRouter.get('/settings', (_req: Request, res: Response) => {
+  const s = dbManager.getFallbackItems('settings');
+  res.json({ success: true, data: s[0] || null });
+});
+
+apiRouter.post(['/settings', '/settings/update'], (req: Request, res: Response) => {
+  const s = req.body;
+  dbManager.setFallbackItems('settings', [s]);
+  res.json({ success: true, data: s });
 });
